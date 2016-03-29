@@ -435,13 +435,16 @@ void PLYImporter::LoadTextureCoordinates(std::vector<aiVector2D>* pvOut)
 		// TODO: seperate variables, what if faces is before vertex in the header?
 		ai_assert(NULL != pvOut);
 
+		EElementSemantic textureElementType;
+
 		unsigned int aiPositions[2] = {0xFFFFFFFF,0xFFFFFFFF};
 		PLY::EDataType aiTypes[2] = {EDT_Char,EDT_Char};
 		PLY::ElementInstanceList* pcList = NULL;
 		unsigned int cnt = 0;
 
-		EElementSemantic textureElementType;
 		unsigned int numVertices = 0;
+		unsigned int aiVertexIndicesPosition = 0xFFFFFFFF;
+		unsigned int aiTexcoordPosition = 0xFFFFFFFF;
 
 		// serach in the DOM for a vertex entry
 		unsigned int _i = 0;
@@ -486,12 +489,12 @@ void PLYImporter::LoadTextureCoordinates(std::vector<aiVector2D>* pvOut)
 								if (PLY::EST_TextureCoordinates == (*a).Semantic)
 								{
 										cnt++;
-										aiPositions[0] = _a;
-										aiPositions[1] = _a;
 										aiTypes[0] = (*a).eType;
-										aiTypes[1] = (*a).eType;
 										textureElementType = PLY::EEST_Face;
-										printf("eType: %d\n", (*a).eType);
+										aiTexcoordPosition = _a;
+								} else if (PLY::EST_VertexIndex == (*a).Semantic)
+								{
+										aiVertexIndicesPosition = _a;
 								}
 						}
 				}
@@ -499,8 +502,7 @@ void PLYImporter::LoadTextureCoordinates(std::vector<aiVector2D>* pvOut)
 		// check whether we have a valid source for the texture coordinates data
 		if (NULL != pcList && 0 != cnt)
 		{
-				printf("Typee: %d\n", (int)textureElementType);
-				if (textureElementType == PLY::EEST_Vertex)
+				if (PLY::EEST_Vertex == textureElementType)
 				{
 						pvOut->reserve(numVertices);
 						for (std::vector<ElementInstance>::const_iterator i = pcList->alInstances.begin();
@@ -523,64 +525,21 @@ void PLYImporter::LoadTextureCoordinates(std::vector<aiVector2D>* pvOut)
 								// and add them to our nice list
 								pvOut->push_back(vOut);
 						}
-				} else if (textureElementType == PLY::EEST_Face && numVertices != 0) {
+				} else if (PLY::EEST_Face != textureElementType && 0 != numVertices && 0xFFFFFFFF != aiVertexIndicesPosition && 0xFFFFFFFF != aiTexcoordPosition) {
 					pvOut->resize(numVertices);
-					printf("num: %d\n", numVertices);
-					bool optSet[numVertices];
-					for (int k=0; k < numVertices; k++)
-						optSet[k]=false;
 					for (std::vector<ElementInstance>::const_iterator i = pcList->alInstances.begin();
 							i != pcList->alInstances.end();++i)
 					{
 							// convert the vertices to sp floats
-							aiVector2D vOut1;
-							vOut1.x = PLY::PropertyInstance::ConvertTo<float>(
-									GetProperty((*i).alProperties, 2).avList[0],aiTypes[0]);
-							vOut1.y = PLY::PropertyInstance::ConvertTo<float>(
-									GetProperty((*i).alProperties, 2).avList[1],aiTypes[0]);
-							int idx1 = PLY::PropertyInstance::ConvertTo<int>(GetProperty((*i).alProperties, 0).avList[0], PLY::EDT_Int);
-
-							if (!optSet[idx1])
-								(*pvOut)[idx1] = vOut1;
-							optSet[idx1] = true;
-
-							/* if (fabs(vOut1.x - 0.19042) < 0.000001) {
-								printf("idx1: %d\n", idx1);
-							} */
-
-							aiVector2D vOut2;
-							vOut2.x = PLY::PropertyInstance::ConvertTo<float>(
-									GetProperty((*i).alProperties, 2).avList[2],aiTypes[0]);
-							vOut2.y = PLY::PropertyInstance::ConvertTo<float>(
-									GetProperty((*i).alProperties, 2).avList[3],aiTypes[0]);
-							int idx2 = PLY::PropertyInstance::ConvertTo<int>(GetProperty((*i).alProperties, 0).avList[1], PLY::EDT_Int);
-							if (!optSet[idx2])
-								(*pvOut)[idx2] = vOut2;
-							optSet[idx2] = true;
-
-							aiVector2D vOut3;
-							vOut3.x = PLY::PropertyInstance::ConvertTo<float>(
-									GetProperty((*i).alProperties, 2).avList[4],aiTypes[0]);
-							vOut3.y = PLY::PropertyInstance::ConvertTo<float>(
-									GetProperty((*i).alProperties, 2).avList[5],aiTypes[0]);
-							int idx3 = PLY::PropertyInstance::ConvertTo<int>(GetProperty((*i).alProperties, 0).avList[2], PLY::EDT_Int);
-							if (!optSet[idx3])
-								(*pvOut)[idx3] = vOut3;
-							optSet[idx3] = true;
-
-							/* if (0xFFFFFFFF != aiPositions[0])
-							{
+							for (unsigned int k = 0; k < 3; ++k) {
+									aiVector2D vOut;
 									vOut.x = PLY::PropertyInstance::ConvertTo<float>(
-											GetProperty((*i).alProperties, aiPositions[0]).avList.front(),aiTypes[0]);
-							}
-
-							if (0xFFFFFFFF != aiPositions[1])
-							{
+											GetProperty((*i).alProperties, aiTexcoordPosition).avList[k * 2],aiTypes[0]);
 									vOut.y = PLY::PropertyInstance::ConvertTo<float>(
-											GetProperty((*i).alProperties, aiPositions[1]).avList.front(),aiTypes[1]);
-							} */
-							// and add them to our nice list
-							//pvOut->push_back(vOut);
+											GetProperty((*i).alProperties, aiTexcoordPosition).avList[k * 2 + 1],aiTypes[0]);
+									int idx = PLY::PropertyInstance::ConvertTo<int>(GetProperty((*i).alProperties, aiVertexIndicesPosition).avList[k], PLY::EDT_Int);
+									(*pvOut)[idx] = vOut;
+							}
 					}
 				}
 		}
